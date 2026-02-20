@@ -47,26 +47,28 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({
 
     // Automatically populate Holidays for the selected staff and CURRENT YEAR
     useEffect(() => {
-        if (!selectedStaffId) return;
-        
+    if (!selectedStaffId) return;
+    
+    setLeaveRecords(prev => {
         const newRecords: LeaveRecord[] = [];
         
         Object.entries(HOLIDAYS).forEach(([date, name]) => {
+            // 현재 선택된 연도의 공휴일만 필터링
             if (!date.startsWith(String(currentYear))) return;
 
             const month = parseInt(date.split('-')[1], 10);
             const memo = `${parseInt(date.split('-')[1])}.${parseInt(date.split('-')[2])} ${name}`;
 
-            const exists = leaveRecords.some(r => 
+            // ✅ 중요: 'prev'(가장 최신 상태)에서 중복 여부를 직접 확인합니다.
+            const exists = prev.some(r => 
                 r.staffId === selectedStaffId && 
                 r.type === 'SUBSTITUTE' && 
-                r.year === currentYear &&
-                r.memo === memo
+                r.refDate === date // 날짜 키값으로 정확히 비교
             );
 
             if (!exists) {
                 newRecords.push({
-                    id: generateId(),
+                    id: `${generateId()}-${date}-${selectedStaffId}`, // ID에 날짜와 직원ID를 포함해 고유성 강화
                     staffId: selectedStaffId,
                     type: 'SUBSTITUTE',
                     date: '',
@@ -80,10 +82,13 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({
             }
         });
 
+        // 추가할 레코드가 있을 때만 새 배열을 반환
         if (newRecords.length > 0) {
-            setLeaveRecords(prev => [...prev, ...newRecords]);
+            return [...prev, ...newRecords];
         }
-    }, [selectedStaffId, currentYear]); 
+        return prev;
+    });
+}, [selectedStaffId, currentYear, setLeaveRecords]); 
 
     // Stats Calculation
     const employeeStats = useMemo(() => staffList.map(emp => {
@@ -329,22 +334,22 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {cStaff.map(staff => {
+                                {cStaff.map((staff, index) => {
                                     const isSelected = selectedStaffId === staff.id;
                                     
                                     return (
                                         <button
                                             key={staff.id}
                                             onClick={() => setSelectedStaffId(staff.id)}
-                                            className={`relative text-left w-full bg-white rounded-2xl p-4 transition-all duration-200 group ${
+                                            className={`relative text-left w-full h-[140px] flex flex-col justify-between bg-white rounded-2xl p-4 pb-5 transition-all duration-200 group ${
                                                 isSelected 
                                                 ? `ring-2 ring-${themeColor}-500 shadow-lg shadow-${themeColor}-100 scale-[1.02] z-10` 
                                                 : 'border border-slate-100 hover:border-slate-300 hover:shadow-md'
                                             }`}
                                         >
                                             <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border mb-1 inline-block ${isBuwon ? 'text-indigo-600 bg-indigo-50 border-indigo-100' : 'text-orange-600 bg-orange-50 border-orange-100'}`}>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border inline-block ${isBuwon ? 'text-indigo-600 bg-indigo-50 border-indigo-100' : 'text-orange-600 bg-orange-50 border-orange-100'}`}>
                                                         {staff.position}
                                                     </span>
                                                     <div className="text-sm font-black text-slate-800">{staff.name}</div>

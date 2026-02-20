@@ -98,7 +98,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
 
     // Grid columns: Date(70px) | OpHours(120px) | Buwon Staff... | Sum(74px) | Gap | Outlet Staff... | Sum(74px)
     const gridTemplateStyle = { 
-        gridTemplateColumns: `70px 120px repeat(${buwonStaff.length}, 100px) 74px 2px repeat(${outletStaff.length}, 100px) 74px` 
+        gridTemplateColumns: `70px 120px repeat(${buwonStaff.length}, minmax(100px, 1fr)) 74px 2px repeat(${outletStaff.length}, minmax(100px, 1fr)) 74px` 
     };
 
     const handleDownloadExcel = (weekIdx: number, cinemaId: 'BUWON' | 'OUTLET') => {
@@ -138,7 +138,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
         {/* Schedule Matrix - Enforced minimum height to prevent disappearance */}
         <div className="flex-1 flex flex-col bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden relative min-h-[500px]">
             <div className="flex-1 overflow-auto custom-scrollbar bg-slate-50/10">
-                <div className="min-w-max">
+                <div className="w-full min-w-max">
                     <div className="sticky top-0 z-30 shadow-sm border-b border-slate-200">
                         <div className="grid bg-slate-50" style={gridTemplateStyle}>
                             <div className="p-3 border-r border-slate-200 col-span-2 flex items-center justify-center font-black text-slate-400 text-xs bg-slate-50/50">구분</div>
