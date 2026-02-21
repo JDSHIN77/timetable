@@ -1,5 +1,5 @@
 
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { Staff, MonthSchedule, DailyOperatingHours } from '../types';
 import { formatDateKey } from './helpers';
 import { HOLIDAYS } from '../constants';
@@ -282,7 +282,7 @@ export const downloadWeeklySchedule = (
             else if (R >= 4 && R <= 7) {
                 cellStyle.border = borderAll;
                 cellStyle.fill = headerFill;
-                cellStyle.font.bold = true;
+                cellStyle.font = { name: "Malgun Gothic", sz: 10, bold: true };
 
                 // Holiday Row (Row 4) Colors
                 if (R === 4 && C >= 2 && ws[addr].v) {
@@ -310,7 +310,7 @@ export const downloadWeeklySchedule = (
                 
                 // Color for "주휴", "휴무", "겸직"
                 if (ws[addr].v === '주휴' || ws[addr].v === '휴무' || ws[addr].v === '겸직') {
-                    cellStyle.font.bold = true;
+                    cellStyle.font = { name: "Malgun Gothic", sz: 10, bold: true };
                 }
             }
             
