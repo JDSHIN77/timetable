@@ -59,6 +59,7 @@ export default function App() {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
+  const [deletePassword, setDeletePassword] = useState('');
 
   const [staffList, setStaffList] = useState<Staff[]>([
     { id: '1', name: '김미소', cinema: 'BUWON', position: '점장' },
@@ -79,6 +80,31 @@ export default function App() {
   const lastSyncedLeaves = React.useRef('');
   const lastSyncedOpHours = React.useRef('');
 
+  const pendingWrites = React.useRef({
+      config: false,
+      schedules: false,
+      leaves: false,
+      opHours: false
+  });
+
+  const isWeeklyOff = useCallback((shiftValue: string | undefined, managedShifts: Record<string, ShiftInfo>) => {
+      if (!shiftValue) return false;
+      if (shiftValue === 'OFF') return true;
+      const label = managedShifts[shiftValue]?.label || '';
+      return label.includes('주휴');
+  }, []);
+
+  const isOtherLeave = useCallback((shiftValue: string | undefined, managedShifts: Record<string, ShiftInfo>) => {
+      if (!shiftValue) return false;
+      if (shiftValue === 'LEAVE') return true;
+      const label = managedShifts[shiftValue]?.label || '';
+      return label.includes('대휴') || label.includes('연차') || label.includes('휴무') || label.includes('휴가');
+  }, []);
+
+  const isOffOrLeave = useCallback((shiftValue: string | undefined, managedShifts: Record<string, ShiftInfo>) => {
+      return isWeeklyOff(shiftValue, managedShifts) || isOtherLeave(shiftValue, managedShifts);
+  }, [isWeeklyOff, isOtherLeave]);
+
   // Firebase Load & Sync Data
   useEffect(() => {
     let configLoaded = false;
@@ -95,7 +121,7 @@ export default function App() {
     const unsubConfig = onSnapshot(doc(db, 'gimhaehr', 'config'), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data.lastUpdatedBy !== clientId) {
+            if (data.lastUpdatedBy !== clientId && !pendingWrites.current.config) {
                 const configStr = JSON.stringify({ staffList: data.staffList, managedShifts: data.managedShifts, cinemas: data.cinemas, annualConfig: data.annualConfig });
                 lastSyncedConfig.current = configStr;
                 
@@ -111,7 +137,7 @@ export default function App() {
     const unsubSchedules = onSnapshot(doc(db, 'gimhaehr', 'schedules'), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data.lastUpdatedBy !== clientId) {
+            if (data.lastUpdatedBy !== clientId && !pendingWrites.current.schedules) {
                 const schedulesStr = JSON.stringify({ schedules: data.schedules });
                 lastSyncedSchedules.current = schedulesStr;
                 
@@ -124,7 +150,7 @@ export default function App() {
     const unsubLeaves = onSnapshot(doc(db, 'gimhaehr', 'leaves'), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data.lastUpdatedBy !== clientId) {
+            if (data.lastUpdatedBy !== clientId && !pendingWrites.current.leaves) {
                 const leavesStr = JSON.stringify({ leaveRecords: data.leaveRecords });
                 lastSyncedLeaves.current = leavesStr;
                 
@@ -137,7 +163,7 @@ export default function App() {
     const unsubOpHours = onSnapshot(doc(db, 'gimhaehr', 'opHours'), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data.lastUpdatedBy !== clientId) {
+            if (data.lastUpdatedBy !== clientId && !pendingWrites.current.opHours) {
                 const opHoursStr = JSON.stringify({ operatingHours: data.operatingHours });
                 lastSyncedOpHours.current = opHoursStr;
                 
@@ -161,13 +187,21 @@ export default function App() {
     const currentStr = JSON.stringify({ staffList, managedShifts, cinemas, annualConfig });
     if (currentStr === lastSyncedConfig.current) return;
 
+    pendingWrites.current.config = true;
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
             lastSyncedConfig.current = currentStr;
-            await setDoc(doc(db, 'gimhaehr', 'config'), { staffList, managedShifts, cinemas, annualConfig, lastUpdatedBy: clientId });
+            const dataToSave = JSON.parse(currentStr);
+            dataToSave.lastUpdatedBy = clientId;
+            await setDoc(doc(db, 'gimhaehr', 'config'), dataToSave);
             setSyncStatus('synced');
-        } catch (e) { setSyncStatus('error'); }
+        } catch (e) { 
+            console.error("Firebase Sync Error:", e);
+            setSyncStatus('error'); 
+        } finally {
+            pendingWrites.current.config = false;
+        }
     }, 1000);
     return () => clearTimeout(timeoutId);
   }, [staffList, managedShifts, cinemas, annualConfig, isLoaded, clientId]);
@@ -177,13 +211,21 @@ export default function App() {
     const currentStr = JSON.stringify({ schedules });
     if (currentStr === lastSyncedSchedules.current) return;
 
+    pendingWrites.current.schedules = true;
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
             lastSyncedSchedules.current = currentStr;
-            await setDoc(doc(db, 'gimhaehr', 'schedules'), { schedules, lastUpdatedBy: clientId });
+            const dataToSave = JSON.parse(currentStr);
+            dataToSave.lastUpdatedBy = clientId;
+            await setDoc(doc(db, 'gimhaehr', 'schedules'), dataToSave);
             setSyncStatus('synced');
-        } catch (e) { setSyncStatus('error'); }
+        } catch (e) { 
+            console.error("Firebase Sync Error:", e);
+            setSyncStatus('error'); 
+        } finally {
+            pendingWrites.current.schedules = false;
+        }
     }, 1000);
     return () => clearTimeout(timeoutId);
   }, [schedules, isLoaded, clientId]);
@@ -193,13 +235,21 @@ export default function App() {
     const currentStr = JSON.stringify({ leaveRecords });
     if (currentStr === lastSyncedLeaves.current) return;
 
+    pendingWrites.current.leaves = true;
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
             lastSyncedLeaves.current = currentStr;
-            await setDoc(doc(db, 'gimhaehr', 'leaves'), { leaveRecords, lastUpdatedBy: clientId });
+            const dataToSave = JSON.parse(currentStr);
+            dataToSave.lastUpdatedBy = clientId;
+            await setDoc(doc(db, 'gimhaehr', 'leaves'), dataToSave);
             setSyncStatus('synced');
-        } catch (e) { setSyncStatus('error'); }
+        } catch (e) { 
+            console.error("Firebase Sync Error:", e);
+            setSyncStatus('error'); 
+        } finally {
+            pendingWrites.current.leaves = false;
+        }
     }, 1000);
     return () => clearTimeout(timeoutId);
   }, [leaveRecords, isLoaded, clientId]);
@@ -209,13 +259,21 @@ export default function App() {
     const currentStr = JSON.stringify({ operatingHours });
     if (currentStr === lastSyncedOpHours.current) return;
 
+    pendingWrites.current.opHours = true;
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
             lastSyncedOpHours.current = currentStr;
-            await setDoc(doc(db, 'gimhaehr', 'opHours'), { operatingHours, lastUpdatedBy: clientId });
+            const dataToSave = JSON.parse(currentStr);
+            dataToSave.lastUpdatedBy = clientId;
+            await setDoc(doc(db, 'gimhaehr', 'opHours'), dataToSave);
             setSyncStatus('synced');
-        } catch (e) { setSyncStatus('error'); }
+        } catch (e) { 
+            console.error("Firebase Sync Error:", e);
+            setSyncStatus('error'); 
+        } finally {
+            pendingWrites.current.opHours = false;
+        }
     }, 1000);
     return () => clearTimeout(timeoutId);
   }, [operatingHours, isLoaded, clientId]);
@@ -292,7 +350,7 @@ export default function App() {
                  });
             }
             
-            const manualWorkerCount = targetManuals.filter(s => s?.value !== 'OFF').length;
+            const manualWorkerCount = targetManuals.filter(s => !isOffOrLeave(s?.value, managedShifts)).length;
             
             const neededAutoOpen = hasManualOpen ? 0 : 1;
             const neededAutoClose = hasManualClose ? 0 : 1;
@@ -302,15 +360,24 @@ export default function App() {
 
         const dailyActiveWorkers = weekIndices.map(() => targetStaff.length);
         const plannedOffs: Record<string, number[]> = {};
-        targetStaff.forEach(s => plannedOffs[s.id] = []);
+        const otherLeaves: Record<string, number[]> = {};
+        targetStaff.forEach(s => {
+            plannedOffs[s.id] = [];
+            otherLeaves[s.id] = [];
+        });
 
         weekIndices.forEach((dayGlobalIdx, wLocalIdx) => {
             const dKey = formatDateKey(days[dayGlobalIdx]);
             targetStaff.forEach(s => {
                 const manualShift = newSchedules[dKey]?.[s.id];
-                if (manualShift?.isManual && manualShift.value === 'OFF') {
-                    plannedOffs[s.id].push(wLocalIdx);
-                    dailyActiveWorkers[wLocalIdx]--;
+                if (manualShift?.isManual) {
+                    if (isWeeklyOff(manualShift.value, managedShifts)) {
+                        plannedOffs[s.id].push(wLocalIdx);
+                        dailyActiveWorkers[wLocalIdx]--;
+                    } else if (isOtherLeave(manualShift.value, managedShifts)) {
+                        otherLeaves[s.id].push(wLocalIdx);
+                        dailyActiveWorkers[wLocalIdx]--;
+                    }
                 }
             });
         });
@@ -324,13 +391,13 @@ export default function App() {
             weekIndices.forEach((dayGlobalIdx, wLocalIdx) => {
                 const dKey = formatDateKey(days[dayGlobalIdx]);
                 const manualShift = newSchedules[dKey]?.[s.id];
-                if (manualShift?.isManual && manualShift.value !== 'OFF') {
+                if (manualShift?.isManual && !isOffOrLeave(manualShift.value, managedShifts)) {
                     busyIndices.push(wLocalIdx);
                 }
             });
 
             let candidates = [0,1,2,3,4,5,6].filter(d => 
-                !plannedOffs[s.id].includes(d) && !busyIndices.includes(d)
+                !plannedOffs[s.id].includes(d) && !otherLeaves[s.id].includes(d) && !busyIndices.includes(d)
             );
 
             candidates.sort((a, b) => {
@@ -379,6 +446,9 @@ export default function App() {
                 } else {
                     if (plannedOffs[s.id]?.includes(wLocalIdx)) {
                         newSchedules[dateKey][s.id] = { value: 'OFF', isManual: false };
+                    } else if (otherLeaves[s.id]?.includes(wLocalIdx)) {
+                        // This shouldn't happen as otherLeaves are manual, but just in case
+                        newSchedules[dateKey][s.id] = { value: 'LEAVE', isManual: false };
                     } else {
                         availableStaff.push(s);
                     }
@@ -516,9 +586,56 @@ export default function App() {
 
   const handleWeeklyManualClear = () => {
     if(weeklyClearTarget) {
+      if (deletePassword !== '4883') {
+          alert('비밀번호가 일치하지 않습니다.');
+          return;
+      }
       clearWeeklyManualSchedule(weeklyClearTarget.weekIdx, weeklyClearTarget.cinemaId);
       setWeeklyClearTarget(null);
+      setDeletePassword('');
     }
+  };
+
+  const handleBackup = () => {
+      const data = {
+          staffList,
+          managedShifts,
+          cinemas,
+          annualConfig,
+          schedules,
+          leaveRecords,
+          operatingHours
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gimhaehr_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+  };
+
+  const handleRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const data = JSON.parse(e.target?.result as string);
+              if (data.staffList) setStaffList(data.staffList);
+              if (data.managedShifts) setManagedShifts(data.managedShifts);
+              if (data.cinemas) setCinemas(data.cinemas);
+              if (data.annualConfig) setAnnualConfig(data.annualConfig);
+              if (data.schedules) setSchedules(data.schedules);
+              if (data.leaveRecords) setLeaveRecords(data.leaveRecords);
+              if (data.operatingHours) setOperatingHours(data.operatingHours);
+              alert('백업 데이터가 성공적으로 복원되었습니다.');
+          } catch (error) {
+              alert('올바르지 않은 백업 파일입니다.');
+          }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
   };
 
   const stats = useMemo(() => {
@@ -531,30 +648,27 @@ export default function App() {
       let hasDualWork = false;
 
       days.forEach(day => {
+        if (day.getMonth() !== currentDate.getMonth()) return; // Only count current month
+
         const dateKey = formatDateKey(day);
         const shiftData = schedules[dateKey]?.[s.id];
         if (shiftData) {
             const shift = shiftData.value;
             const isWE = day.getDay() === 0 || day.getDay() === 6 || !!HOLIDAYS[dateKey];
+            const label = managedShifts[shift]?.label || '';
 
             if (shift.startsWith('DUAL_')) {
                 const norm = shift.replace('DUAL_', '') as 'OPEN'|'MIDDLE'|'CLOSE';
-                
-                if (s.cinema === 'BUWON') {
-                    dualCounts[norm]++;
-                    if (isWE) dualCounts.weekendWork++;
-                    hasDualWork = true;
-                } else {
-                    homeCounts[norm]++;
-                    if (isWE) homeCounts.weekendWork++;
-                }
+                dualCounts[norm]++;
+                if (isWE) dualCounts.weekendWork++;
+                hasDualWork = true;
             } 
             else if (['OPEN', 'MIDDLE', 'CLOSE'].includes(shift)) {
                 homeCounts[shift as 'OPEN'|'MIDDLE'|'CLOSE']++;
                 if (isWE) homeCounts.weekendWork++;
             }
-            else if (shift === 'OFF') homeCounts.OFF++;
-            else if (shift === 'LEAVE') homeCounts.LEAVE++;
+            else if (shift === 'OFF' || label.includes('주휴')) homeCounts.OFF++;
+            else if (shift === 'LEAVE' || label.includes('대휴') || label.includes('연차') || label.includes('휴무')) homeCounts.LEAVE++;
         }
       });
 
@@ -563,12 +677,12 @@ export default function App() {
           counts: homeCounts
       });
 
-      if (hasDualWork && s.cinema === 'BUWON') {
+      if (hasDualWork) {
           resultStats.push({
               id: `${s.id}_DUAL`,
               name: `${s.name} (겸직)`,
               position: s.position,
-              cinema: 'OUTLET',
+              cinema: s.cinema === 'BUWON' ? 'OUTLET' : 'BUWON',
               counts: dualCounts
           });
       }
@@ -731,10 +845,10 @@ export default function App() {
                     managedShifts={managedShifts} 
                     isGenerating={isGenerating} 
                     generatingTarget={generatingTarget} 
-                    onRequestClear={() => setIsClearModalOpen(true)}
-                    onRequestManualClear={() => setIsManualClearModalOpen(true)}
+                    onRequestClear={() => { setIsClearModalOpen(true); setDeletePassword(''); }}
+                    onRequestManualClear={() => { setIsManualClearModalOpen(true); setDeletePassword(''); }}
                     generateSchedule={generateSchedule} 
-                    onOpenWeeklyClear={(weekIdx, cinemaId) => setWeeklyClearTarget({weekIdx, cinemaId})}
+                    onOpenWeeklyClear={(weekIdx, cinemaId) => { setWeeklyClearTarget({weekIdx, cinemaId}); setDeletePassword(''); }}
                     openManualModal={(dk, s, cs) => { 
                         setManualModalData({dateKey: dk, staff: s, currentShift: cs || undefined }); 
                         setTempSelectedShift(cs?.value || null); 
@@ -748,6 +862,8 @@ export default function App() {
                     operatingHours={operatingHours}
                     onUpdateOperatingHours={(dateKey, cinemaId, range) => { /* handled by modal now */ }}
                     onOpenOpHoursModal={(cinema) => setOpHoursModal({ isOpen: true, cinema })}
+                    onBackup={handleBackup}
+                    onRestore={handleRestore}
                 />
             ) : activeTab === 'staff' ? (
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
@@ -877,10 +993,21 @@ export default function App() {
                 <p className="text-xs text-slate-500 mb-6 font-medium">
                     자동으로 생성된 근무만 삭제되며,<br/>수동으로 설정한 근무는 유지됩니다.
                 </p>
+                <input 
+                    type="password" 
+                    placeholder="비밀번호 (4자리 숫자)" 
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    className="w-full p-3 mb-4 text-center text-sm font-bold border border-slate-200 rounded-xl outline-none focus:border-red-500"
+                />
                 <div className="flex gap-2">
-                    <button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">취소</button>
+                    <button onClick={() => { setIsClearModalOpen(false); setDeletePassword(''); }} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">취소</button>
                     <button 
                         onClick={() => {
+                            if (deletePassword !== '4883') {
+                                alert('비밀번호가 일치하지 않습니다.');
+                                return;
+                            }
                             const days = getCinemaMonthRange(currentDate);
                             const newSchedules = { ...schedules };
                             days.forEach(d => {
@@ -893,6 +1020,7 @@ export default function App() {
                             });
                             setSchedules(newSchedules);
                             setIsClearModalOpen(false);
+                            setDeletePassword('');
                         }} 
                         className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600"
                     >
@@ -914,10 +1042,21 @@ export default function App() {
                 <p className="text-xs text-slate-500 mb-6 font-medium">
                     수동으로 설정한 근무만 삭제되며,<br/>자동 생성된 근무는 유지됩니다.
                 </p>
+                <input 
+                    type="password" 
+                    placeholder="비밀번호 (4자리 숫자)" 
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    className="w-full p-3 mb-4 text-center text-sm font-bold border border-slate-200 rounded-xl outline-none focus:border-orange-500"
+                />
                 <div className="flex gap-2">
-                    <button onClick={() => setIsManualClearModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">취소</button>
+                    <button onClick={() => { setIsManualClearModalOpen(false); setDeletePassword(''); }} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">취소</button>
                     <button 
                         onClick={() => {
+                             if (deletePassword !== '4883') {
+                                 alert('비밀번호가 일치하지 않습니다.');
+                                 return;
+                             }
                              const days = getCinemaMonthRange(currentDate);
                              const newSchedules = { ...schedules };
                              days.forEach(d => {
@@ -930,6 +1069,7 @@ export default function App() {
                              });
                              setSchedules(newSchedules);
                              setIsManualClearModalOpen(false);
+                             setDeletePassword('');
                         }} 
                         className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600"
                     >
@@ -950,12 +1090,26 @@ export default function App() {
                 <h3 className="text-lg font-black text-slate-900 mb-2">
                     {weeklyClearTarget.weekIdx + 1}주차 {weeklyClearTarget.cinemaId === 'BUWON' ? '김해부원' : '김해아울렛'} 스케줄 삭제
                 </h3>
-                <p className="text-xs text-slate-500 mb-6 font-medium">
+                <p className="text-xs text-slate-500 mb-4 font-medium">
                     어떤 스케줄을 삭제하시겠습니까?
                 </p>
+                <input 
+                    type="password" 
+                    placeholder="비밀번호 (4자리 숫자)" 
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    className="w-full p-3 mb-4 text-center text-sm font-bold border border-slate-200 rounded-xl outline-none focus:border-slate-500"
+                />
                 <div className="flex flex-col gap-2">
                     <button 
-                        onClick={handleWeeklyAutoClear}
+                        onClick={() => {
+                            if (deletePassword !== '4883') {
+                                alert('비밀번호가 일치하지 않습니다.');
+                                return;
+                            }
+                            handleWeeklyAutoClear();
+                            setDeletePassword('');
+                        }}
                         className="w-full py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold hover:bg-indigo-100 border border-indigo-100 flex items-center justify-center gap-2"
                     >
                         <Sparkles size={16}/> 자동 생성된 스케줄만 삭제
@@ -966,7 +1120,7 @@ export default function App() {
                     >
                         <Eraser size={16}/> 수동 설정한 스케줄만 삭제
                     </button>
-                    <button onClick={() => setWeeklyClearTarget(null)} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 mt-2">
+                    <button onClick={() => { setWeeklyClearTarget(null); setDeletePassword(''); }} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 mt-2">
                         취소
                     </button>
                 </div>

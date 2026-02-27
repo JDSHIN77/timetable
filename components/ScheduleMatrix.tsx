@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Calendar, Trash2, RefreshCw, Sparkles, MousePointerClick, Plus, BarChart3, Pencil, Check, Palmtree, Eraser, Lock, Clock, X, FileSpreadsheet } from 'lucide-react';
+import { Calendar, Trash2, RefreshCw, Sparkles, MousePointerClick, Plus, BarChart3, Pencil, Check, Palmtree, Eraser, Lock, Clock, X, FileSpreadsheet, Download, Upload } from 'lucide-react';
 import { Staff, MonthSchedule, ShiftInfo, Cinema, StaffStats, ShiftData, DailyOperatingHours } from '../types';
 import { formatDateKey, getCinemaMonthRange } from '../utils/helpers';
 import { HOLIDAYS } from '../constants';
@@ -24,6 +24,8 @@ interface MatrixViewProps {
     operatingHours: DailyOperatingHours;
     onUpdateOperatingHours: (dateKey: string, cinemaId: string, range: string) => void;
     onOpenOpHoursModal?: (cinema: Cinema) => void;
+    onBackup?: () => void;
+    onRestore?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 const CinemaHeader: React.FC<{ 
@@ -87,7 +89,7 @@ const CinemaHeader: React.FC<{
 export const MatrixView: React.FC<MatrixViewProps> = ({ 
     currentDate, staffList, schedules, managedShifts, isGenerating, 
     generatingTarget, onRequestClear, onRequestManualClear, generateSchedule, onOpenWeeklyClear, openManualModal, stats, cinemas, onUpdateCinemaName,
-    operatingHours, onUpdateOperatingHours, onOpenOpHoursModal
+    operatingHours, onUpdateOperatingHours, onOpenOpHoursModal, onBackup, onRestore
 }) => {
     const days = getCinemaMonthRange(currentDate);
     const buwonStaff = staffList.filter(s => s.cinema === 'BUWON');
@@ -129,9 +131,20 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                     <span className="font-medium text-slate-700">각 지점의 <span className="text-indigo-600 font-bold">자동 생성</span> 버튼을 눌러 근무를 배정하세요.</span>
                 </p>
             </div>
-            <div className="flex gap-2 w-full md:w-auto">
-                 <button onClick={onRequestManualClear} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-red-50 hover:text-red-600 transition-all shadow-sm"><Trash2 size={16} /> 월간 수동 삭제</button>
-                 <button onClick={onRequestClear} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all shadow-sm"><Eraser size={16} /> 월간 자동 삭제</button>
+            <div className="flex gap-2 w-full md:w-auto flex-wrap justify-end">
+                 {onBackup && (
+                     <button onClick={onBackup} className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-sm font-bold hover:bg-emerald-100 transition-all shadow-sm">
+                         <Download size={16} /> 백업
+                     </button>
+                 )}
+                 {onRestore && (
+                     <label className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-sm font-bold hover:bg-blue-100 transition-all shadow-sm cursor-pointer">
+                         <Upload size={16} /> 복원
+                         <input type="file" accept=".json" onChange={onRestore} className="hidden" />
+                     </label>
+                 )}
+                 <button onClick={onRequestManualClear} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-all shadow-sm"><Eraser size={16} /> 월간 수동 삭제</button>
+                 <button onClick={onRequestClear} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-red-50 hover:text-red-600 transition-all shadow-sm"><Trash2 size={16} /> 월간 자동 삭제</button>
             </div>
         </div>
 
@@ -199,24 +212,27 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                             const buwonOp = opHours['BUWON'];
                             const outletOp = opHours['OUTLET'];
 
-                            // Modified Count Logic
+                            // Modified Count Logic: Only count OPEN, MIDDLE, CLOSE (and DUAL equivalents)
                             const buwonCount = staffList.filter(s => {
                                 const sh = dayData[s.id]?.value;
-                                if (!sh || sh === 'OFF' || sh === 'LEAVE') return false;
+                                if (!sh) return false;
                                 if (s.cinema === 'BUWON') {
-                                    if (sh.startsWith('DUAL_')) return false;
-                                    return true;
+                                    return ['OPEN', 'MIDDLE', 'CLOSE'].includes(sh);
+                                }
+                                if (s.cinema === 'OUTLET') {
+                                    return ['DUAL_OPEN', 'DUAL_MIDDLE', 'DUAL_CLOSE'].includes(sh);
                                 }
                                 return false;
                             }).length;
 
                             const outletCount = staffList.filter(s => {
                                 const sh = dayData[s.id]?.value;
-                                if (!sh || sh === 'OFF' || sh === 'LEAVE') return false;
-                                if (s.cinema === 'OUTLET') return true; 
+                                if (!sh) return false;
+                                if (s.cinema === 'OUTLET') {
+                                    return ['OPEN', 'MIDDLE', 'CLOSE'].includes(sh);
+                                }
                                 if (s.cinema === 'BUWON') {
-                                    if (sh.startsWith('DUAL_')) return true;
-                                    return false;
+                                    return ['DUAL_OPEN', 'DUAL_MIDDLE', 'DUAL_CLOSE'].includes(sh);
                                 }
                                 return false;
                             }).length;
