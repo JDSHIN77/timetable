@@ -74,6 +74,11 @@ export default function App() {
 
   const clientId = useMemo(() => Math.random().toString(36).substring(2, 15), []);
 
+  const lastSyncedConfig = React.useRef('');
+  const lastSyncedSchedules = React.useRef('');
+  const lastSyncedLeaves = React.useRef('');
+  const lastSyncedOpHours = React.useRef('');
+
   // Firebase Load & Sync Data
   useEffect(() => {
     let configLoaded = false;
@@ -91,6 +96,9 @@ export default function App() {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.lastUpdatedBy !== clientId) {
+                const configStr = JSON.stringify({ staffList: data.staffList, managedShifts: data.managedShifts, cinemas: data.cinemas, annualConfig: data.annualConfig });
+                lastSyncedConfig.current = configStr;
+                
                 if (data.staffList) setStaffList(data.staffList);
                 if (data.managedShifts) setManagedShifts(data.managedShifts);
                 if (data.cinemas) setCinemas(data.cinemas);
@@ -104,6 +112,9 @@ export default function App() {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.lastUpdatedBy !== clientId) {
+                const schedulesStr = JSON.stringify({ schedules: data.schedules });
+                lastSyncedSchedules.current = schedulesStr;
+                
                 if (data.schedules) setSchedules(data.schedules);
             }
         }
@@ -114,6 +125,9 @@ export default function App() {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.lastUpdatedBy !== clientId) {
+                const leavesStr = JSON.stringify({ leaveRecords: data.leaveRecords });
+                lastSyncedLeaves.current = leavesStr;
+                
                 if (data.leaveRecords) setLeaveRecords(data.leaveRecords);
             }
         }
@@ -124,6 +138,9 @@ export default function App() {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.lastUpdatedBy !== clientId) {
+                const opHoursStr = JSON.stringify({ operatingHours: data.operatingHours });
+                lastSyncedOpHours.current = opHoursStr;
+                
                 if (data.operatingHours) setOperatingHours(data.operatingHours);
             }
         }
@@ -141,9 +158,13 @@ export default function App() {
   // Firebase Save Data (Debounced)
   useEffect(() => {
     if (!isLoaded) return;
+    const currentStr = JSON.stringify({ staffList, managedShifts, cinemas, annualConfig });
+    if (currentStr === lastSyncedConfig.current) return;
+
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
+            lastSyncedConfig.current = currentStr;
             await setDoc(doc(db, 'gimhaehr', 'config'), { staffList, managedShifts, cinemas, annualConfig, lastUpdatedBy: clientId });
             setSyncStatus('synced');
         } catch (e) { setSyncStatus('error'); }
@@ -153,9 +174,13 @@ export default function App() {
 
   useEffect(() => {
     if (!isLoaded) return;
+    const currentStr = JSON.stringify({ schedules });
+    if (currentStr === lastSyncedSchedules.current) return;
+
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
+            lastSyncedSchedules.current = currentStr;
             await setDoc(doc(db, 'gimhaehr', 'schedules'), { schedules, lastUpdatedBy: clientId });
             setSyncStatus('synced');
         } catch (e) { setSyncStatus('error'); }
@@ -165,9 +190,13 @@ export default function App() {
 
   useEffect(() => {
     if (!isLoaded) return;
+    const currentStr = JSON.stringify({ leaveRecords });
+    if (currentStr === lastSyncedLeaves.current) return;
+
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
+            lastSyncedLeaves.current = currentStr;
             await setDoc(doc(db, 'gimhaehr', 'leaves'), { leaveRecords, lastUpdatedBy: clientId });
             setSyncStatus('synced');
         } catch (e) { setSyncStatus('error'); }
@@ -177,9 +206,13 @@ export default function App() {
 
   useEffect(() => {
     if (!isLoaded) return;
+    const currentStr = JSON.stringify({ operatingHours });
+    if (currentStr === lastSyncedOpHours.current) return;
+
     setSyncStatus('syncing');
     const timeoutId = setTimeout(async () => {
         try {
+            lastSyncedOpHours.current = currentStr;
             await setDoc(doc(db, 'gimhaehr', 'opHours'), { operatingHours, lastUpdatedBy: clientId });
             setSyncStatus('synced');
         } catch (e) { setSyncStatus('error'); }
@@ -775,7 +808,15 @@ export default function App() {
                ) : (
                  <>
                      <div className="grid grid-cols-3 gap-2 mb-4 max-h-[300px] overflow-y-auto custom-scrollbar p-1">
-                        {(Object.entries(managedShifts) as [string, ShiftInfo][]).map(([key, shift]) => (
+                        {Object.entries(managedShifts).sort(([keyA], [keyB]) => {
+                            const order = ['OPEN', 'MIDDLE', 'CLOSE', 'OFF', 'LEAVE'];
+                            const idxA = order.indexOf(keyA);
+                            const idxB = order.indexOf(keyB);
+                            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                            if (idxA !== -1) return -1;
+                            if (idxB !== -1) return 1;
+                            return keyA.localeCompare(keyB);
+                        }).map(([key, shift]) => (
                             <button 
                               key={key} 
                               onClick={() => setTempSelectedShift(key)}
