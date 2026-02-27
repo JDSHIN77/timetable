@@ -1,9 +1,11 @@
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   Calendar, Users, ChevronLeft, ChevronRight, 
   MonitorPlay, X, Trash2, Sparkles, RefreshCw, Check, Plus, Eraser, Plane
 } from 'lucide-react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
 import { Staff, MonthSchedule, ShiftType, ShiftInfo, Cinema, ShiftData, StaffStats, LeaveRecord, AnnualLeaveConfig, DailyOperatingHours } from './types';
 import { DEFAULT_SHIFTS, CINEMAS as INITIAL_CINEMAS, HOLIDAYS } from './constants';
 import { formatDateKey, getCinemaMonthRange } from './utils/helpers';
@@ -54,6 +56,7 @@ export default function App() {
   const [operatingHours, setOperatingHours] = useState<DailyOperatingHours>({});
   const [opHoursModal, setOpHoursModal] = useState<{isOpen: boolean, cinema: Cinema | null}>({ isOpen: false, cinema: null });
 
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const [staffList, setStaffList] = useState<Staff[]>([
     { id: '1', name: '김미소', cinema: 'BUWON', position: '점장' },
@@ -66,6 +69,75 @@ export default function App() {
   ]);
   
   const [schedules, setSchedules] = useState<MonthSchedule>({});
+
+  // Firebase Load Data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+          const [configSnap, schedulesSnap, leavesSnap, opHoursSnap] = await Promise.all([
+              getDoc(doc(db, 'gimhaehr', 'config')),
+              getDoc(doc(db, 'gimhaehr', 'schedules')),
+              getDoc(doc(db, 'gimhaehr', 'leaves')),
+              getDoc(doc(db, 'gimhaehr', 'opHours'))
+          ]);
+
+          if (configSnap.exists()) {
+              const data = configSnap.data();
+              if (data.staffList) setStaffList(data.staffList);
+              if (data.managedShifts) setManagedShifts(data.managedShifts);
+              if (data.cinemas) setCinemas(data.cinemas);
+              if (data.annualConfig) setAnnualConfig(data.annualConfig);
+          }
+          if (schedulesSnap.exists()) {
+              if (schedulesSnap.data().schedules) setSchedules(schedulesSnap.data().schedules);
+          }
+          if (leavesSnap.exists()) {
+              if (leavesSnap.data().leaveRecords) setLeaveRecords(leavesSnap.data().leaveRecords);
+          }
+          if (opHoursSnap.exists()) {
+              if (opHoursSnap.data().operatingHours) setOperatingHours(opHoursSnap.data().operatingHours);
+          }
+      } catch (e) {
+          console.error("Error loading data from Firebase", e);
+      } finally {
+          setIsLoaded(true);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Firebase Save Data (Debounced)
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timeoutId = setTimeout(() => {
+        setDoc(doc(db, 'gimhaehr', 'config'), { staffList, managedShifts, cinemas, annualConfig });
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [staffList, managedShifts, cinemas, annualConfig, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timeoutId = setTimeout(() => {
+        setDoc(doc(db, 'gimhaehr', 'schedules'), { schedules });
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [schedules, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timeoutId = setTimeout(() => {
+        setDoc(doc(db, 'gimhaehr', 'leaves'), { leaveRecords });
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [leaveRecords, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timeoutId = setTimeout(() => {
+        setDoc(doc(db, 'gimhaehr', 'opHours'), { operatingHours });
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [operatingHours, isLoaded]);
 
   const generateSchedule = useCallback((targetCinema: 'BUWON' | 'OUTLET', targetWeekIdx?: number) => {
     const isWeekly = targetWeekIdx !== undefined;
@@ -512,6 +584,17 @@ export default function App() {
       setNewShiftName('');
       setIsAddingShift(false);
   };
+
+  if (!isLoaded) {
+      return (
+          <div className="flex h-screen w-screen items-center justify-center bg-[#F1F5F9]">
+              <div className="flex flex-col items-center gap-4">
+                  <RefreshCw className="animate-spin text-indigo-600" size={32} />
+                  <p className="text-slate-500 font-bold">데이터를 불러오는 중입니다...</p>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-[#F1F5F9] text-slate-900 overflow-hidden">
