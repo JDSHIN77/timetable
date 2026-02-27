@@ -103,6 +103,10 @@ export const downloadWeeklySchedule = (
     const row3 = Array(17).fill(''); // Approval Space
     data.push(row3);
 
+    // Row 4: Empty Gap
+    const row4 = Array(17).fill('');
+    data.push(row4);
+
     // Merges for Top Section
     merges.push({ s: { r: 1, c: 0 }, e: { r: 3, c: 13 } }); // Title (Extended to col 13)
     merges.push({ s: { r: 1, c: 14 }, e: { r: 3, c: 14 } }); // "결재" Vertical at 14
@@ -110,60 +114,60 @@ export const downloadWeeklySchedule = (
     merges.push({ s: { r: 2, c: 15 }, e: { r: 3, c: 15 } }); // "담당" Space at 15
     merges.push({ s: { r: 2, c: 16 }, e: { r: 3, c: 16 } }); // "점장" Space at 16
 
-    // Row 4: "이슈", [Holidays...], "서명"
-    const row4 = Array(17).fill('');
-    row4[0] = '이슈';
+    // Row 5: "이슈", [Holidays...], "서명"
+    const row5 = Array(17).fill('');
+    row5[0] = '이슈';
     weekDates.forEach((d, i) => {
         const dk = formatDateKey(d);
-        row4[2 + i * 2] = HOLIDAYS[dk] || '';
+        row5[2 + i * 2] = HOLIDAYS[dk] || '';
     });
-    row4[16] = '서명';
-    data.push(row4);
-    
-    merges.push({ s: { r: 4, c: 0 }, e: { r: 4, c: 1 } }); // "이슈" merged A5:B5
-    weekDates.forEach((_, i) => {
-        merges.push({ s: { r: 4, c: 2 + i * 2 }, e: { r: 4, c: 2 + i * 2 + 1 } }); // Holiday Cells merged
-    });
-    merges.push({ s: { r: 4, c: 16 }, e: { r: 7, c: 16 } }); // "서명" merged vertically Q5:Q8
-
-    // Row 5: "구분", "날짜", [DateString...]
-    const row5 = Array(17).fill('');
-    row5[0] = '구분';
-    row5[1] = '날짜';
-    weekDates.forEach((d, i) => {
-        row5[2 + i * 2] = `${d.getMonth() + 1}월 ${d.getDate()}일`;
-    });
+    row5[16] = '서명';
     data.push(row5);
     
-    merges.push({ s: { r: 5, c: 0 }, e: { r: 7, c: 0 } }); // "구분" merged vert A6:A8
-    merges.push({ s: { r: 5, c: 1 }, e: { r: 7, c: 1 } }); // "날짜" merged vert B6:B8
+    merges.push({ s: { r: 5, c: 0 }, e: { r: 5, c: 1 } }); // "이슈" merged A6:B6
     weekDates.forEach((_, i) => {
-        merges.push({ s: { r: 5, c: 2 + i * 2 }, e: { r: 5, c: 2 + i * 2 + 1 } }); // Date Cells merged
+        merges.push({ s: { r: 5, c: 2 + i * 2 }, e: { r: 5, c: 2 + i * 2 + 1 } }); // Holiday Cells merged
     });
+    merges.push({ s: { r: 5, c: 16 }, e: { r: 8, c: 16 } }); // "서명" merged vertically Q6:Q9
 
-    // Row 6: Empty, Empty, [DayName...]
+    // Row 6: "구분", "날짜", [DateString...]
     const row6 = Array(17).fill('');
-    const daysKR = ['일', '월', '화', '수', '목', '금', '토'];
+    row6[0] = '구분';
+    row6[1] = '날짜';
     weekDates.forEach((d, i) => {
-        row6[2 + i * 2] = daysKR[d.getDay()];
+        row6[2 + i * 2] = `${d.getMonth() + 1}월 ${d.getDate()}일`;
     });
     data.push(row6);
+    
+    merges.push({ s: { r: 6, c: 0 }, e: { r: 8, c: 0 } }); // "구분" merged vert A7:A9
+    merges.push({ s: { r: 6, c: 1 }, e: { r: 8, c: 1 } }); // "날짜" merged vert B7:B9
     weekDates.forEach((_, i) => {
-        merges.push({ s: { r: 6, c: 2 + i * 2 }, e: { r: 6, c: 2 + i * 2 + 1 } }); // Day Cells merged
+        merges.push({ s: { r: 6, c: 2 + i * 2 }, e: { r: 6, c: 2 + i * 2 + 1 } }); // Date Cells merged
     });
 
-    // Row 7: Empty, Empty, ["출", "퇴"...]
+    // Row 7: Empty, Empty, [DayName...]
     const row7 = Array(17).fill('');
-    weekDates.forEach((_, i) => {
-        row7[2 + i * 2] = '출';
-        row7[2 + i * 2 + 1] = '퇴';
+    const daysKR = ['일', '월', '화', '수', '목', '금', '토'];
+    weekDates.forEach((d, i) => {
+        row7[2 + i * 2] = daysKR[d.getDay()];
     });
     data.push(row7);
+    weekDates.forEach((_, i) => {
+        merges.push({ s: { r: 7, c: 2 + i * 2 }, e: { r: 7, c: 2 + i * 2 + 1 } }); // Day Cells merged
+    });
+
+    // Row 8: Empty, Empty, ["출", "퇴"...]
+    const row8 = Array(17).fill('');
+    weekDates.forEach((_, i) => {
+        row8[2 + i * 2] = '출';
+        row8[2 + i * 2 + 1] = '퇴';
+    });
+    data.push(row8);
 
     // Track rows that are "Dual" rows to set different height
     const dualRowsIndices: number[] = [];
 
-    // Row 8+: Staff Data
+    // Row 9+: Staff Data
     targetStaff.forEach((staff) => {
         const rowData = Array(17).fill('');
         rowData[0] = staff.position;
@@ -245,6 +249,8 @@ export const downloadWeeklySchedule = (
 
     // --- ROW HEIGHTS ---
     const wrows = data.map((_, i) => {
+        if (i === 4) return { hpt: 10 }; // Gap row
+        if (i >= 5 && i <= 8) return { hpt: 30 }; // Header rows (이슈, 날짜, 요일, 출퇴)
         if (dualRowsIndices.includes(i)) return { hpt: 18 }; // Dual Role Rows
         return { hpt: 30 }; // Regular Rows
     });
@@ -278,19 +284,23 @@ export const downloadWeeklySchedule = (
                 cellStyle.border = borderAll;
                 // No bold for approval text requested
             }
-            // Table Header (Row 4-7)
-            else if (R >= 4 && R <= 7) {
+            // Gap Row (Row 4)
+            else if (R === 4) {
+                // No borders for the gap row
+            }
+            // Table Header (Row 5-8)
+            else if (R >= 5 && R <= 8) {
                 cellStyle.border = borderAll;
                 cellStyle.fill = headerFill;
                 cellStyle.font = { name: "Malgun Gothic", sz: 10, bold: true };
 
-                // Holiday Row (Row 4) Colors
-                if (R === 4 && C >= 2 && ws[addr].v) {
+                // Holiday Row (Row 5) Colors
+                if (R === 5 && C >= 2 && ws[addr].v) {
                     cellStyle.font.color = { rgb: "FF0000" };
                 }
                 
-                // Day/Date Text Colors (Row 5, 6)
-                if ((R === 5 || R === 6) && C >= 2) {
+                // Day/Date Text Colors (Row 6, 7)
+                if ((R === 6 || R === 7) && C >= 2) {
                     const dateIdx = Math.floor((C - 2) / 2);
                     if (dateIdx >= 0 && dateIdx < weekDates.length) {
                         const d = weekDates[dateIdx];
@@ -303,9 +313,14 @@ export const downloadWeeklySchedule = (
                         else if (isSat) cellStyle.font.color = { rgb: "0000FF" };
                     }
                 }
+
+                // "서명" text color (Row 5, Col 16)
+                if (R === 5 && C === 16) {
+                    cellStyle.font.color = { rgb: "FF0000" };
+                }
             }
-            // Data Rows (Row 8+)
-            else if (R >= 8) {
+            // Data Rows (Row 9+)
+            else if (R >= 9) {
                 cellStyle.border = borderAll;
                 
                 // Color for "주휴", "휴무", "겸직"
