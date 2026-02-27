@@ -445,13 +445,13 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                                 {annualBuckets.map((bucket) => (
                                     <div key={bucket.index} className="bg-slate-50 border border-slate-200 rounded-xl p-3 min-h-[150px] flex flex-col relative group hover:bg-white hover:shadow-md transition-all">
-                                        <div className="flex justify-between items-start mb-2">
+                                        <div className="flex justify-between items-center mb-2 min-h-[20px]">
                                             <span className="text-[10px] font-black text-slate-400 uppercase">{bucket.index + 1}일차</span>
                                             {bucket.remaining >= 25 && (
-                                                <div className="opacity-0 group-hover:opacity-100 flex flex-col gap-1 absolute right-2 top-2 z-10 bg-white/95 p-1.5 rounded-lg border border-slate-100 shadow-sm">
-                                                    {bucket.remaining >= 100 && <button onClick={() => addRecord('ANNUAL', 1)} className="text-[9px] bg-slate-50 border px-2 py-1 rounded font-bold hover:bg-indigo-600 hover:text-white mb-0.5 whitespace-nowrap">1.0 연차</button>}
-                                                    {bucket.remaining >= 50 && <button onClick={() => addRecord('ANNUAL', 0.5)} className="text-[9px] bg-slate-50 border px-2 py-1 rounded font-bold hover:bg-emerald-500 hover:text-white mb-0.5 whitespace-nowrap">0.5 반차</button>}
-                                                    <button onClick={() => addRecord('ANNUAL', 0.25)} className="text-[9px] bg-slate-50 border px-2 py-1 rounded font-bold hover:bg-orange-400 hover:text-white whitespace-nowrap">0.25 반반차</button>
+                                                <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                                                    {bucket.remaining >= 100 && <button onClick={() => addRecord('ANNUAL', 1)} className="text-[9px] bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded font-bold hover:bg-indigo-600 hover:text-white transition-colors whitespace-nowrap">1일</button>}
+                                                    {bucket.remaining >= 50 && <button onClick={() => addRecord('ANNUAL', 0.5)} className="text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded font-bold hover:bg-emerald-500 hover:text-white transition-colors whitespace-nowrap">0.5일</button>}
+                                                    <button onClick={() => addRecord('ANNUAL', 0.25)} className="text-[9px] bg-orange-50 text-orange-600 border border-orange-200 px-1.5 py-0.5 rounded font-bold hover:bg-orange-400 hover:text-white transition-colors whitespace-nowrap">0.25일</button>
                                                 </div>
                                             )}
                                         </div>

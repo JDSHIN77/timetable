@@ -2,9 +2,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   Calendar, Users, ChevronLeft, ChevronRight, 
-  MonitorPlay, X, Trash2, Sparkles, RefreshCw, Check, Plus, Eraser, Plane
+  MonitorPlay, X, Trash2, Sparkles, RefreshCw, Check, Plus, Eraser, Plane,
+  Cloud, CloudOff
 } from 'lucide-react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { Staff, MonthSchedule, ShiftType, ShiftInfo, Cinema, ShiftData, StaffStats, LeaveRecord, AnnualLeaveConfig, DailyOperatingHours } from './types';
 import { DEFAULT_SHIFTS, CINEMAS as INITIAL_CINEMAS, HOLIDAYS } from './constants';
@@ -57,6 +58,7 @@ export default function App() {
   const [opHoursModal, setOpHoursModal] = useState<{isOpen: boolean, cinema: Cinema | null}>({ isOpen: false, cinema: null });
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
 
   const [staffList, setStaffList] = useState<Staff[]>([
     { id: '1', name: '김미소', cinema: 'BUWON', position: '점장' },
@@ -70,74 +72,120 @@ export default function App() {
   
   const [schedules, setSchedules] = useState<MonthSchedule>({});
 
-  // Firebase Load Data
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-          const [configSnap, schedulesSnap, leavesSnap, opHoursSnap] = await Promise.all([
-              getDoc(doc(db, 'gimhaehr', 'config')),
-              getDoc(doc(db, 'gimhaehr', 'schedules')),
-              getDoc(doc(db, 'gimhaehr', 'leaves')),
-              getDoc(doc(db, 'gimhaehr', 'opHours'))
-          ]);
+  const clientId = useMemo(() => Math.random().toString(36).substring(2, 15), []);
 
-          if (configSnap.exists()) {
-              const data = configSnap.data();
-              if (data.staffList) setStaffList(data.staffList);
-              if (data.managedShifts) setManagedShifts(data.managedShifts);
-              if (data.cinemas) setCinemas(data.cinemas);
-              if (data.annualConfig) setAnnualConfig(data.annualConfig);
-          }
-          if (schedulesSnap.exists()) {
-              if (schedulesSnap.data().schedules) setSchedules(schedulesSnap.data().schedules);
-          }
-          if (leavesSnap.exists()) {
-              if (leavesSnap.data().leaveRecords) setLeaveRecords(leavesSnap.data().leaveRecords);
-          }
-          if (opHoursSnap.exists()) {
-              if (opHoursSnap.data().operatingHours) setOperatingHours(opHoursSnap.data().operatingHours);
-          }
-      } catch (e) {
-          console.error("Error loading data from Firebase", e);
-      } finally {
-          setIsLoaded(true);
-      }
+  // Firebase Load & Sync Data
+  useEffect(() => {
+    let configLoaded = false;
+    let schedulesLoaded = false;
+    let leavesLoaded = false;
+    let opHoursLoaded = false;
+
+    const checkAllLoaded = () => {
+        if (configLoaded && schedulesLoaded && leavesLoaded && opHoursLoaded) {
+            setIsLoaded(true);
+        }
     };
-    loadData();
-  }, []);
+
+    const unsubConfig = onSnapshot(doc(db, 'gimhaehr', 'config'), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.lastUpdatedBy !== clientId) {
+                if (data.staffList) setStaffList(data.staffList);
+                if (data.managedShifts) setManagedShifts(data.managedShifts);
+                if (data.cinemas) setCinemas(data.cinemas);
+                if (data.annualConfig) setAnnualConfig(data.annualConfig);
+            }
+        }
+        if (!configLoaded) { configLoaded = true; checkAllLoaded(); }
+    });
+
+    const unsubSchedules = onSnapshot(doc(db, 'gimhaehr', 'schedules'), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.lastUpdatedBy !== clientId) {
+                if (data.schedules) setSchedules(data.schedules);
+            }
+        }
+        if (!schedulesLoaded) { schedulesLoaded = true; checkAllLoaded(); }
+    });
+
+    const unsubLeaves = onSnapshot(doc(db, 'gimhaehr', 'leaves'), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.lastUpdatedBy !== clientId) {
+                if (data.leaveRecords) setLeaveRecords(data.leaveRecords);
+            }
+        }
+        if (!leavesLoaded) { leavesLoaded = true; checkAllLoaded(); }
+    });
+
+    const unsubOpHours = onSnapshot(doc(db, 'gimhaehr', 'opHours'), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.lastUpdatedBy !== clientId) {
+                if (data.operatingHours) setOperatingHours(data.operatingHours);
+            }
+        }
+        if (!opHoursLoaded) { opHoursLoaded = true; checkAllLoaded(); }
+    });
+
+    return () => {
+        unsubConfig();
+        unsubSchedules();
+        unsubLeaves();
+        unsubOpHours();
+    };
+  }, [clientId]);
 
   // Firebase Save Data (Debounced)
   useEffect(() => {
     if (!isLoaded) return;
-    const timeoutId = setTimeout(() => {
-        setDoc(doc(db, 'gimhaehr', 'config'), { staffList, managedShifts, cinemas, annualConfig });
+    setSyncStatus('syncing');
+    const timeoutId = setTimeout(async () => {
+        try {
+            await setDoc(doc(db, 'gimhaehr', 'config'), { staffList, managedShifts, cinemas, annualConfig, lastUpdatedBy: clientId });
+            setSyncStatus('synced');
+        } catch (e) { setSyncStatus('error'); }
     }, 1000);
     return () => clearTimeout(timeoutId);
-  }, [staffList, managedShifts, cinemas, annualConfig, isLoaded]);
+  }, [staffList, managedShifts, cinemas, annualConfig, isLoaded, clientId]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    const timeoutId = setTimeout(() => {
-        setDoc(doc(db, 'gimhaehr', 'schedules'), { schedules });
+    setSyncStatus('syncing');
+    const timeoutId = setTimeout(async () => {
+        try {
+            await setDoc(doc(db, 'gimhaehr', 'schedules'), { schedules, lastUpdatedBy: clientId });
+            setSyncStatus('synced');
+        } catch (e) { setSyncStatus('error'); }
     }, 1000);
     return () => clearTimeout(timeoutId);
-  }, [schedules, isLoaded]);
+  }, [schedules, isLoaded, clientId]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    const timeoutId = setTimeout(() => {
-        setDoc(doc(db, 'gimhaehr', 'leaves'), { leaveRecords });
+    setSyncStatus('syncing');
+    const timeoutId = setTimeout(async () => {
+        try {
+            await setDoc(doc(db, 'gimhaehr', 'leaves'), { leaveRecords, lastUpdatedBy: clientId });
+            setSyncStatus('synced');
+        } catch (e) { setSyncStatus('error'); }
     }, 1000);
     return () => clearTimeout(timeoutId);
-  }, [leaveRecords, isLoaded]);
+  }, [leaveRecords, isLoaded, clientId]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    const timeoutId = setTimeout(() => {
-        setDoc(doc(db, 'gimhaehr', 'opHours'), { operatingHours });
+    setSyncStatus('syncing');
+    const timeoutId = setTimeout(async () => {
+        try {
+            await setDoc(doc(db, 'gimhaehr', 'opHours'), { operatingHours, lastUpdatedBy: clientId });
+            setSyncStatus('synced');
+        } catch (e) { setSyncStatus('error'); }
     }, 1000);
     return () => clearTimeout(timeoutId);
-  }, [operatingHours, isLoaded]);
+  }, [operatingHours, isLoaded, clientId]);
 
   const generateSchedule = useCallback((targetCinema: 'BUWON' | 'OUTLET', targetWeekIdx?: number) => {
     const isWeekly = targetWeekIdx !== undefined;
@@ -617,6 +665,20 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                 syncStatus === 'syncing' ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-sm' :
+                 syncStatus === 'synced' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' :
+                 'bg-red-50 text-red-600 border-red-200 shadow-sm'
+             }`}>
+                 {syncStatus === 'syncing' && <RefreshCw size={14} className="animate-spin" />}
+                 {syncStatus === 'synced' && <Cloud size={14} />}
+                 {syncStatus === 'error' && <CloudOff size={14} />}
+                 <span>
+                     {syncStatus === 'syncing' ? '동기화 중...' :
+                      syncStatus === 'synced' ? 'DB 연결됨' : '연결 오류'}
+                 </span>
+             </div>
+
              <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
                 <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1.5 hover:bg-slate-50 rounded-lg"><ChevronLeft size={16} /></button>
                 <span className="text-sm font-black px-4 tabular-nums">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</span>
