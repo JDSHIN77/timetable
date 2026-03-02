@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Calendar, Trash2, RefreshCw, Sparkles, MousePointerClick, Plus, BarChart3, Pencil, Check, Palmtree, Eraser, Lock, Clock, X, FileSpreadsheet, Download, Upload } from 'lucide-react';
+import { Calendar, Trash2, RefreshCw, Sparkles, MousePointerClick, Plus, BarChart3, Pencil, Check, Palmtree, Eraser, Lock, Clock, X, FileSpreadsheet, Download, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 import { Staff, MonthSchedule, ShiftInfo, Cinema, StaffStats, ShiftData, DailyOperatingHours } from '../types';
 import { formatDateKey, getCinemaMonthRange } from '../utils/helpers';
 import { HOLIDAYS } from '../constants';
@@ -97,6 +97,8 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
 
     const buwonCinema = cinemas.find(c => c.id === 'BUWON')!;
     const outletCinema = cinemas.find(c => c.id === 'OUTLET')!;
+
+    const [isStatsExpanded, setIsStatsExpanded] = useState(false);
 
     // Grid columns: Date(70px) | OpHours(120px) | Buwon Staff... | Sum(74px) | Gap | Outlet Staff... | Sum(74px)
     const gridTemplateStyle = { 
@@ -418,63 +420,76 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             </div>
         </div>
 
-        {/* Statistics Table - Constrained max height for balance */}
-        <div className="shrink-0 max-h-[300px] overflow-y-auto custom-scrollbar">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2">
-                {cinemas.map(cinema => {
-                    const cStats = stats.filter(s => s.cinema === cinema.id);
-                    return (
-                        <div key={cinema.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-                            <div className={`px-5 py-3 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 ${cinema.id === 'BUWON' ? 'bg-indigo-50/80' : 'bg-orange-50/80'}`}>
-                                <div className="flex items-center gap-2">
-                                    <BarChart3 size={16} className={cinema.id === 'BUWON' ? 'text-indigo-600' : 'text-orange-600'} />
-                                    <h4 className="font-bold text-sm text-slate-800">{cinema.name} 근무 통계</h4>
-                                </div>
-                                <span className="text-[10px] text-slate-400 font-medium">이번 달 합계</span>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-xs">
-                                    <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
-                                        <tr>
-                                            <th className="p-3 pl-5 font-bold whitespace-nowrap">이름</th>
-                                            <th className="p-3 text-center text-blue-600 font-bold whitespace-nowrap">오픈</th>
-                                            <th className="p-3 text-center text-orange-600 font-bold whitespace-nowrap">미들</th>
-                                            <th className="p-3 text-center text-purple-600 font-bold whitespace-nowrap">마감</th>
-                                            <th className="p-3 text-center text-slate-900 font-black bg-slate-100/50 whitespace-nowrap">총 근무</th>
-                                            <th className="p-3 text-center text-red-600 font-bold flex items-center justify-center gap-1 whitespace-nowrap">
-                                                <Palmtree size={12}/> 주말/공휴
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {cStats.map(s => {
-                                            const totalWork = s.counts.OPEN + s.counts.MIDDLE + s.counts.CLOSE;
-                                            return (
-                                                <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="p-3 pl-5 font-bold text-slate-800 flex flex-col">
-                                                        <span>{s.name}</span>
-                                                        <span className="text-[9px] text-slate-400 font-medium">{s.position}</span>
-                                                    </td>
-                                                    <td className="p-3 text-center font-medium text-slate-600 bg-blue-50/10">{s.counts.OPEN}</td>
-                                                    <td className="p-3 text-center font-medium text-slate-600 bg-orange-50/10">{s.counts.MIDDLE}</td>
-                                                    <td className="p-3 text-center font-medium text-slate-600 bg-purple-50/10">{s.counts.CLOSE}</td>
-                                                    <td className="p-3 text-center font-black text-slate-800 bg-slate-100/50">{totalWork}</td>
-                                                    <td className="p-3 text-center font-black text-red-600 bg-red-50/10">{s.counts.weekendWork}</td>
+        {/* Statistics Table - Collapsible */}
+        <div className="shrink-0 flex flex-col gap-2">
+            <button 
+                onClick={() => setIsStatsExpanded(!isStatsExpanded)}
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl transition-colors shadow-sm"
+            >
+                <BarChart3 size={16} className="text-indigo-600" />
+                <span className="text-sm font-bold">월간 근무 통계 {isStatsExpanded ? '접기' : '보기'}</span>
+                {isStatsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {isStatsExpanded && (
+                <div className="overflow-y-auto custom-scrollbar animate-in slide-in-from-top-2 fade-in duration-200">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-2">
+                        {cinemas.map(cinema => {
+                            const cStats = stats.filter(s => s.cinema === cinema.id);
+                            return (
+                                <div key={cinema.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+                                    <div className={`px-4 py-2 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10 ${cinema.id === 'BUWON' ? 'bg-indigo-50/80' : 'bg-orange-50/80'}`}>
+                                        <div className="flex items-center gap-2">
+                                            <BarChart3 size={14} className={cinema.id === 'BUWON' ? 'text-indigo-600' : 'text-orange-600'} />
+                                            <h4 className="font-bold text-xs text-slate-800">{cinema.name} 근무 통계</h4>
+                                        </div>
+                                        <span className="text-[9px] text-slate-400 font-medium">이번 달 합계</span>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-[11px]">
+                                            <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                                                <tr>
+                                                    <th className="py-1.5 px-3 pl-4 font-bold whitespace-nowrap">이름</th>
+                                                    <th className="py-1.5 px-2 text-center text-blue-600 font-bold whitespace-nowrap">오픈</th>
+                                                    <th className="py-1.5 px-2 text-center text-orange-600 font-bold whitespace-nowrap">미들</th>
+                                                    <th className="py-1.5 px-2 text-center text-purple-600 font-bold whitespace-nowrap">마감</th>
+                                                    <th className="py-1.5 px-2 text-center text-slate-900 font-black bg-slate-100/50 whitespace-nowrap">총 근무</th>
+                                                    <th className="py-1.5 px-2 text-center text-red-600 font-bold flex items-center justify-center gap-1 whitespace-nowrap">
+                                                        <Palmtree size={10}/> 주말/공휴
+                                                    </th>
                                                 </tr>
-                                            );
-                                        })}
-                                        {cStats.length === 0 && (
-                                            <tr>
-                                                <td colSpan={6} className="p-6 text-center text-slate-400 text-xs">근무 내역이 없습니다.</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {cStats.map(s => {
+                                                    const totalWork = s.counts.OPEN + s.counts.MIDDLE + s.counts.CLOSE;
+                                                    return (
+                                                        <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="py-1.5 px-3 pl-4 font-bold text-slate-800 flex flex-col">
+                                                                <span>{s.name}</span>
+                                                                <span className="text-[8px] text-slate-400 font-medium">{s.position}</span>
+                                                            </td>
+                                                            <td className="py-1.5 px-2 text-center font-medium text-slate-600 bg-blue-50/10">{s.counts.OPEN}</td>
+                                                            <td className="py-1.5 px-2 text-center font-medium text-slate-600 bg-orange-50/10">{s.counts.MIDDLE}</td>
+                                                            <td className="py-1.5 px-2 text-center font-medium text-slate-600 bg-purple-50/10">{s.counts.CLOSE}</td>
+                                                            <td className="py-1.5 px-2 text-center font-black text-slate-800 bg-slate-100/50">{totalWork}</td>
+                                                            <td className="py-1.5 px-2 text-center font-black text-red-600 bg-red-50/10">{s.counts.weekendWork}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {cStats.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={6} className="py-4 text-center text-slate-400 text-[10px]">근무 내역이 없습니다.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
       </div>
     );
